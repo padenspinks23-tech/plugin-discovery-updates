@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.*
+*.sqlite*
+*.db
+data/
+snapshots/
+artifacts/
+private/
+*.token
+*.secret
+*auth*.json
