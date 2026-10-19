@@ -38,6 +38,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual({item['id']: item['name'] for item in result['entries']}['plugin_synthetic_a'], 'Synthetic Alpha')
         self.assertEqual(result['counts'], {'entries': 2, 'with_description': 1})
         self.assertFalse(result['publication_authorized'])
+        self.assertTrue(all(e['claimed_public'] is True and 'verified_public' not in e for e in result['entries']))
         self.assertEqual(result['source']['verification_status'], 'unverified_claims')
         first['records'].reverse()
         self.assertEqual(stager.canonical(result), stager.canonical(stager.validate(first)))
@@ -55,9 +56,14 @@ class SnapshotTests(unittest.TestCase):
         for key, value in [('id', '../bad'), ('id', 'plugin-with-hyphen'), ('verified_public', False),
                            ('verified_public', 1), ('name', 'bad\nname'),
                            ('description', '\u202eevil'), ('name', 'x' * 201),
+                           ('name', 'bad\u2028line'), ('name', 'bad\u2029line'),
                            ('cookie', 'secret'), ('source_url', 'https://evil.test/apps/plugin_synthetic_b'),
                            ('source_url', 'https://chatgpt.com/plugins/plugin-other'),
                            ('source_url', 'https://chatgpt.com/apps/plugin_synthetic_b'),
+                           ('source_url', 'https://chatgpt.com/plugins/plugin_synthetic_b/'),
+                           ('source_url', 'http://chatgpt.com/plugins/plugin_synthetic_b'),
+                           ('source_url', 'https://CHATGPT.com/plugins/plugin_synthetic_b'),
+                           ('source_url', 'https://chatgpt.com/plugins/plugin_synthetic_b#part'),
                            ('source_url', 'https://chatgpt.com/plugins/plugin_synthetic_b?token=x')]:
             item = sample(); item['records'][1][key] = value; cases.append(item)
         item = sample(); item['records'].append(copy.deepcopy(item['records'][0])); cases.append(item)
@@ -66,6 +72,27 @@ class SnapshotTests(unittest.TestCase):
         for item in cases:
             with self.subTest(item=item), self.assertRaises(ValueError):
                 stager.validate(item)
+
+    def test_id_bounds_and_unicode_exclusions(self):
+        for identifier in ('a' * 6, 'a' * 120, 'test_~id'):
+            item = sample()
+            item['records'][0]['id'] = identifier
+            item['records'][0]['source_url'] = 'https://chatgpt.com/plugins/' + identifier
+            self.assertEqual(stager.validate(item)['counts']['entries'], 2)
+        for identifier in ('a' * 5, 'a' * 121, '١' * 6, 'bad-hyphen'):
+            item = sample()
+            item['records'][0]['id'] = identifier
+            item['records'][0]['source_url'] = 'https://chatgpt.com/plugins/' + identifier
+            with self.assertRaises(ValueError):
+                stager.validate(item)
+
+    def test_fifo_input_rejected_without_blocking(self):
+        import os
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'input.fifo'
+            os.mkfifo(path)
+            with self.assertRaisesRegex(ValueError, 'regular file'):
+                stager.stage(path, Path(td) / 'stage.json')
 
     def test_zero_records(self):
         item = sample(); item['records'] = []

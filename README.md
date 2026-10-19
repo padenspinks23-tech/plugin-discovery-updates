@@ -41,8 +41,9 @@ The scaffold now includes an offline validator/stager; it still has no source
 adapter, collector or publisher. Only supply a local export after independently
 establishing permission to obtain and process it:
 
-    python3 scripts/stage_snapshot.py --input /path/to/export.json --output /path/to/staging.json
+    python3 scripts/stage_snapshot.py --input /path/to/export.json --output artifacts/staging.json
 
+Create the ignored artifacts/ directory locally before running the example.
 The output directory must already exist. Exit 0 means structural validation and
 atomic staging succeeded; exit 2 means rejection or an I/O failure. Diagnostics
 never echo record contents. Nothing contacts a network or changes release gates.
@@ -52,7 +53,9 @@ The strict version-1 input contract is:
 
 - `format`: exactly `public-chatgpt-directory-export`; `version`: integer `1`.
 - `source_type`: exactly `official_public_chatgpt_directory`. Private account
-  lists, Codex app/list, MCPTop and third-party scrapes are unsupported.
+  lists, Codex app/list, MCPTop and third-party scrapes are rejected when
+  truthfully labelled, but a relabelled export cannot be identified offline.
+  Release gates 1-3 require independent verification.
 - `issued_at`: valid UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` form.
 - `terms_ref` and `verification_proof_ref`: nonempty strings, at most 1,024
   characters each, referencing the terms/document review and external source,
@@ -70,6 +73,9 @@ The strict version-1 input contract is:
 Input is UTF-8 JSON, at most 8 MiB. Duplicate JSON keys and nonstandard constants
 are rejected. Any invalid record rejects the whole export before output changes.
 No sample directory entries are shipped outside tests.
+
+Output entries say claimed_public: true (not verified_public), because
+public scope has not been independently verified.
 
 The staging format is `public-chatgpt-directory-staging`, version `1`, containing
 `source` metadata, sanitized `entries` sorted by ID, `counts` (`entries` and

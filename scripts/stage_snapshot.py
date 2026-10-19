@@ -28,7 +28,8 @@ def canonical(value):
 def text(value, limit):
     if not isinstance(value, str) or len(value) > limit:
         raise ValueError('Invalid or oversized text')
-    if any(unicodedata.category(char).startswith('C') for char in value):
+    if any(unicodedata.category(char).startswith('C') or
+           unicodedata.category(char) in ('Zl', 'Zp') for char in value):
         raise ValueError('Control or non-text character')
     value = unicodedata.normalize('NFC', value).strip()
     if not value or len(value) > limit:
@@ -72,7 +73,7 @@ def validate(data):
         if record['source_url'] != url or record['verified_public'] is not True:
             raise ValueError('Noncanonical link or missing public-scope claim')
         entry = {'id': identifier, 'name': text(record['name'], 200),
-                 'source_url': url, 'verified_public': True}
+                 'source_url': url, 'claimed_public': True}
         if 'description' in record:
             entry['description'] = text(record['description'], 4000)
         entries.append(entry)
@@ -100,6 +101,8 @@ def reject_constant(value):
 
 def stage(input_path, output_path):
     """Validate fully before touching output; replace via same-directory temp file."""
+    if not input_path.is_file():
+        raise ValueError('Input must be a regular file')
     if input_path.resolve() == output_path.resolve():
         raise ValueError('Input and output must differ')
     with input_path.open('rb') as stream:
@@ -122,6 +125,7 @@ def stage(input_path, output_path):
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, output_path)
+        temporary = None
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
